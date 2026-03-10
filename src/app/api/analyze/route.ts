@@ -53,9 +53,8 @@ ${context ? `追加情報: ${context}` : ""}
 }`;
 
     const response = await client.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 8000,
-      thinking: { type: "enabled", budget_tokens: 5000 },
+      model: "claude-haiku-4-5",
+      max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: "user", content: `以下の株式データを分析してください:\n\n${stockInfo}` }],
     });
@@ -80,7 +79,12 @@ ${context ? `追加情報: ${context}` : ""}
       };
     }
 
-    return NextResponse.json({ symbol, ...analysis, analysisDate: new Date().toISOString() });
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+    const costUsd = inputTokens * (1.0 / 1_000_000) + outputTokens * (5.0 / 1_000_000);
+    const usage = { inputTokens, outputTokens, costUsd };
+
+    return NextResponse.json({ symbol, ...analysis, analysisDate: new Date().toISOString(), usage });
   } catch (error) {
     console.error("Analysis error:", error);
     return NextResponse.json({ error: "Failed to analyze stock" }, { status: 500 });

@@ -29,6 +29,12 @@ export interface StockQuote {
   currency: string;
 }
 
+export interface ApiUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 export interface StockAnalysis {
   symbol: string;
   recommendation: "BUY" | "SELL" | "HOLD";
@@ -39,6 +45,7 @@ export interface StockAnalysis {
   bearishPoints: string[];
   riskLevel: "LOW" | "MEDIUM" | "HIGH";
   analysisDate: string;
+  usage?: ApiUsage;
 }
 
 export interface DiscoverStock {

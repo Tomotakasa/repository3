@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw, Sparkles, TrendingUp, AlertCircle } from "lucide-react";
-import type { DiscoverStock, StockQuote } from "@/types";
+import type { DiscoverStock, StockQuote, ApiUsage } from "@/types";
 import { getPortfolio, addToPortfolio, addToWatchlist, isInWatchlist } from "@/lib/portfolioStorage";
 import AddPortfolioModal from "@/components/AddPortfolioModal";
 import DiscoverCard from "@/components/DiscoverCard";
@@ -11,6 +11,7 @@ import type { PortfolioItem } from "@/types";
 interface DiscoverResponse {
   recommendations: DiscoverStock[];
   generatedAt: string;
+  usage?: ApiUsage;
 }
 
 export default function DiscoverPage() {
@@ -146,7 +147,7 @@ export default function DiscoverPage() {
         <>
           {data.recommendations.length > 0 ? (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <TrendingUp className="w-5 h-5 text-green-400" />
                 <h2 className="text-white font-semibold">
                   注目銘柄 {data.recommendations.length}件
@@ -154,6 +155,13 @@ export default function DiscoverPage() {
                 <span className="text-gray-500 text-sm">
                   · 分析時刻: {new Date(data.generatedAt).toLocaleTimeString("ja-JP")}
                 </span>
+                {data.usage && (
+                  <span className="text-gray-600 text-xs ml-auto">
+                    使用トークン: {(data.usage.inputTokens + data.usage.outputTokens).toLocaleString()}
+                    （入力 {data.usage.inputTokens.toLocaleString()} / 出力 {data.usage.outputTokens.toLocaleString()}）
+                    · 約 ${data.usage.costUsd.toFixed(4)}
+                  </span>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

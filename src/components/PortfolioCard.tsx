@@ -234,9 +234,16 @@ export default function PortfolioCard({ item, quote, onRemove }: Props) {
                 </div>
               </div>
 
-              <p className="text-gray-600 text-xs">
-                分析日時: {new Date(analysis.analysisDate).toLocaleString("ja-JP")}
-              </p>
+              <div className="flex items-center justify-between flex-wrap gap-1">
+                <p className="text-gray-600 text-xs">
+                  分析日時: {new Date(analysis.analysisDate).toLocaleString("ja-JP")}
+                </p>
+                {analysis.usage && (
+                  <p className="text-gray-600 text-xs">
+                    トークン: {(analysis.usage.inputTokens + analysis.usage.outputTokens).toLocaleString()} · 約 ${analysis.usage.costUsd.toFixed(4)}
+                  </p>
+                )}
+              </div>
             </div>
           ) : null}
         </div>

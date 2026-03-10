@@ -67,9 +67,8 @@ export async function GET(req: NextRequest) {
 ]`;
 
     const response = await client.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 8000,
-      thinking: { type: "enabled", budget_tokens: 5000 },
+      model: "claude-haiku-4-5",
+      max_tokens: 2048,
       system: systemPrompt,
       messages: [{
         role: "user",
@@ -89,7 +88,12 @@ export async function GET(req: NextRequest) {
       recommendations = [];
     }
 
-    return NextResponse.json({ recommendations, stockData, generatedAt: new Date().toISOString() });
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+    const costUsd = inputTokens * (1.0 / 1_000_000) + outputTokens * (5.0 / 1_000_000);
+    const usage = { inputTokens, outputTokens, costUsd };
+
+    return NextResponse.json({ recommendations, stockData, generatedAt: new Date().toISOString(), usage });
   } catch (error) {
     console.error("Discover error:", error);
     return NextResponse.json({ error: "Failed to fetch recommendations" }, { status: 500 });
