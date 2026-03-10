@@ -1,31 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import yahooFinance from "yahoo-finance2";
+import { searchSymbol } from "@/lib/yahooFinance";
 
 export async function GET(req: NextRequest) {
-  const query = req.nextUrl.searchParams.get("q");
+  const query = req.nextUrl.searchParams.get("q") ?? "";
+  if (!query) return NextResponse.json({ results: [] });
 
-  if (!query || query.length < 1) {
-    return NextResponse.json({ results: [] });
-  }
+  const raw = await searchSymbol(query);
 
-  try {
-    const result = await yahooFinance.search(query, {
-      quotesCount: 8,
-      newsCount: 0,
-    });
+  const results = raw
+    .filter((r) =>
+      r.quoteType === "EQUITY" || r.quoteType === "ETF" || r.quoteType === "INDEX"
+    )
+    .map((r) => ({
+      symbol:   r.symbol,
+      name:     r.longname ?? r.shortname ?? r.symbol,
+      exchange: r.exchange ?? "",
+      type:     r.quoteType ?? "",
+    }));
 
-    const results = (result.quotes ?? [])
-      .filter((q) => q.quoteType === "EQUITY" || q.quoteType === "ETF")
-      .map((q) => ({
-        symbol: q.symbol,
-        name: "longname" in q ? q.longname : ("shortname" in q ? q.shortname : q.symbol),
-        exchange: "exchange" in q ? q.exchange : "",
-        type: q.quoteType,
-      }));
-
-    return NextResponse.json({ results });
-  } catch (error) {
-    console.error("Search error:", error);
-    return NextResponse.json({ results: [] });
-  }
+  return NextResponse.json({ results });
 }
