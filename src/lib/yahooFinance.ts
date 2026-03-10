@@ -1,17 +1,14 @@
 /**
- * Direct Yahoo Finance API helper
- * Uses the public Yahoo Finance endpoints to avoid yahoo-finance2 TypeScript issues.
+ * Yahoo Finance API helper with crumb/cookie authentication
  */
 
+const YF_QUOTE   = "https://query2.finance.yahoo.com/v7/finance/quote";
 const YF_CHART   = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YF_SEARCH  = "https://query2.finance.yahoo.com/v1/finance/search";
-const YF_QUOTE   = "https://query2.finance.yahoo.com/v7/finance/quote";
+const YF_CRUMB   = "https://query2.finance.yahoo.com/v1/test/getcrumb";
+const YF_HOME    = "https://finance.yahoo.com/";
 
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  "Accept": "application/json",
-};
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -55,27 +52,63 @@ export interface YFNewsItem {
   providerPublishTime?: number;
 }
 
-// ── Quote ──────────────────────────────────────────────────────────────
+// ── Auth (crumb + cookie) ───────────────────────────────────────────────
 
-export async function fetchQuote(symbol: string): Promise<YFQuote | null> {
+let _cookies = "";
+let _crumb   = "";
+let _authTs  = 0;
+const AUTH_TTL = 30 * 60 * 1000; // 30 min
+
+async function getAuth(): Promise<{ cookies: string; crumb: string } | null> {
+  if (_crumb && Date.now() - _authTs < AUTH_TTL) {
+    return { cookies: _cookies, crumb: _crumb };
+  }
   try {
-    const url = `${YF_QUOTE}?symbols=${encodeURIComponent(symbol)}&fields=shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,averageDailyVolume3Month,marketCap,trailingPE,fiftyTwoWeekHigh,fiftyTwoWeekLow,currency`;
-    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 60 } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const result = json?.quoteResponse?.result?.[0];
-    if (!result) return null;
-    return result as YFQuote;
+    // 1. Get cookies from Yahoo Finance homepage
+    const homeRes = await fetch(YF_HOME, {
+      headers: { "User-Agent": UA, "Accept": "text/html" },
+      redirect: "follow",
+    });
+    const setCookies = homeRes.headers.getSetCookie?.() ?? [];
+    _cookies = setCookies.map((c) => c.split(";")[0]).join("; ");
+
+    // 2. Get crumb
+    const crumbRes = await fetch(YF_CRUMB, {
+      headers: { "User-Agent": UA, "Cookie": _cookies },
+    });
+    if (!crumbRes.ok) return null;
+    _crumb  = (await crumbRes.text()).trim();
+    _authTs = Date.now();
+    return { cookies: _cookies, crumb: _crumb };
   } catch {
     return null;
   }
 }
 
+function baseHeaders(cookies: string) {
+  return {
+    "User-Agent": UA,
+    "Accept": "application/json",
+    "Cookie": cookies,
+  };
+}
+
+// ── Quote ──────────────────────────────────────────────────────────────
+
+export async function fetchQuote(symbol: string): Promise<YFQuote | null> {
+  const quotes = await fetchQuotes([symbol]);
+  return quotes[0] ?? null;
+}
+
 export async function fetchQuotes(symbols: string[]): Promise<YFQuote[]> {
   if (symbols.length === 0) return [];
   try {
-    const url = `${YF_QUOTE}?symbols=${symbols.map(encodeURIComponent).join(",")}&fields=shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,averageDailyVolume3Month,marketCap,trailingPE,fiftyTwoWeekHigh,fiftyTwoWeekLow,currency`;
-    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 60 } });
+    const auth = await getAuth();
+    const crumbParam = auth ? `&crumb=${encodeURIComponent(auth.crumb)}` : "";
+    const cookies    = auth?.cookies ?? "";
+    const fields = "shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,averageDailyVolume3Month,marketCap,trailingPE,fiftyTwoWeekHigh,fiftyTwoWeekLow,currency";
+    const url = `${YF_QUOTE}?symbols=${symbols.map(encodeURIComponent).join(",")}&fields=${fields}${crumbParam}`;
+    const res = await fetch(url, { headers: baseHeaders(cookies) });
     if (!res.ok) return [];
     const json = await res.json();
     return (json?.quoteResponse?.result ?? []) as YFQuote[];
@@ -95,35 +128,29 @@ const PERIOD_CONFIG: Record<string, { range: string; interval: string }> = {
   "5Y": { range: "5y",  interval: "1mo" },
 };
 
-export async function fetchChart(
-  symbol: string,
-  period = "3M"
-): Promise<YFChartPoint[]> {
+export async function fetchChart(symbol: string, period = "3M"): Promise<YFChartPoint[]> {
   const cfg = PERIOD_CONFIG[period] ?? PERIOD_CONFIG["3M"];
   try {
-    const url = `${YF_CHART}/${encodeURIComponent(symbol)}?range=${cfg.range}&interval=${cfg.interval}`;
-    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
+    const auth = await getAuth();
+    const crumbParam = auth ? `&crumb=${encodeURIComponent(auth.crumb)}` : "";
+    const cookies    = auth?.cookies ?? "";
+    const url = `${YF_CHART}/${encodeURIComponent(symbol)}?range=${cfg.range}&interval=${cfg.interval}${crumbParam}`;
+    const res = await fetch(url, { headers: baseHeaders(cookies) });
     if (!res.ok) return [];
     const json = await res.json();
     const result = json?.chart?.result?.[0];
     if (!result) return [];
 
     const timestamps: number[] = result.timestamp ?? [];
-    const q = result.indicators?.quote?.[0] ?? {};
-    const opens: number[]   = q.open   ?? [];
-    const highs: number[]   = q.high   ?? [];
-    const lows: number[]    = q.low    ?? [];
-    const closes: number[]  = q.close  ?? [];
-    const volumes: number[] = q.volume ?? [];
-
+    const q  = result.indicators?.quote?.[0] ?? {};
     return timestamps
       .map((ts, i) => ({
         date:   new Date(ts * 1000).toISOString().split("T")[0],
-        open:   opens[i]   ?? 0,
-        high:   highs[i]   ?? 0,
-        low:    lows[i]    ?? 0,
-        close:  closes[i]  ?? 0,
-        volume: volumes[i] ?? 0,
+        open:   (q.open   ?? [])[i] ?? 0,
+        high:   (q.high   ?? [])[i] ?? 0,
+        low:    (q.low    ?? [])[i] ?? 0,
+        close:  (q.close  ?? [])[i] ?? 0,
+        volume: (q.volume ?? [])[i] ?? 0,
       }))
       .filter((p) => p.close > 0);
   } catch {
@@ -135,8 +162,11 @@ export async function fetchChart(
 
 export async function searchSymbol(query: string): Promise<YFSearchResult[]> {
   try {
-    const url = `${YF_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`;
-    const res = await fetch(url, { headers: HEADERS });
+    const auth = await getAuth();
+    const crumbParam = auth ? `&crumb=${encodeURIComponent(auth.crumb)}` : "";
+    const cookies    = auth?.cookies ?? "";
+    const url = `${YF_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0${crumbParam}`;
+    const res = await fetch(url, { headers: baseHeaders(cookies) });
     if (!res.ok) return [];
     const json = await res.json();
     return (json?.finance?.result?.[0]?.quotes ?? json?.quotes ?? []) as YFSearchResult[];
@@ -149,8 +179,11 @@ export async function searchSymbol(query: string): Promise<YFSearchResult[]> {
 
 export async function fetchNews(symbol: string): Promise<YFNewsItem[]> {
   try {
-    const url = `${YF_SEARCH}?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=5`;
-    const res = await fetch(url, { headers: HEADERS });
+    const auth = await getAuth();
+    const crumbParam = auth ? `&crumb=${encodeURIComponent(auth.crumb)}` : "";
+    const cookies    = auth?.cookies ?? "";
+    const url = `${YF_SEARCH}?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=5${crumbParam}`;
+    const res = await fetch(url, { headers: baseHeaders(cookies) });
     if (!res.ok) return [];
     const json = await res.json();
     return (json?.finance?.result?.[0]?.news ?? json?.news ?? []) as YFNewsItem[];
