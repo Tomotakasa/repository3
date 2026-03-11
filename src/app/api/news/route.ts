@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchNews } from "@/lib/yahooFinance";
+import { fetchNews } from "@/lib/finnhub";
 
 export async function GET(req: NextRequest) {
   const symbols = req.nextUrl.searchParams.get("symbols")?.split(",") ?? [];

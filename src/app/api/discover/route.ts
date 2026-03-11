@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { fetchQuotes } from "@/lib/yahooFinance";
+import { fetchQuotes } from "@/lib/finnhub";
 
 const client = new Anthropic();
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchSymbol } from "@/lib/yahooFinance";
+import { searchSymbol } from "@/lib/finnhub";
 
 export async function GET(req: NextRequest) {
   const query = req.nextUrl.searchParams.get("q") ?? "";

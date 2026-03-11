@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchQuotes } from "@/lib/yahooFinance";
+import { fetchQuotes } from "@/lib/finnhub";
 
 const MARKET_INDICES = [
   { symbol: "^GSPC", name: "S&P 500"   },

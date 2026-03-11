@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchChart } from "@/lib/yahooFinance";
+import { fetchChart } from "@/lib/finnhub";
 
 export async function GET(
   req: NextRequest,
